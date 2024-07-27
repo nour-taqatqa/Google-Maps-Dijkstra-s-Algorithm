@@ -45,7 +45,7 @@ A matrix was implemented for those reasons.
 
 **5) Dictionary 3**: 
 - **Role**: maps category to position. Each key will be a different category and the value for this key is a linked list of positions for which the category is present. This was used to return the positions for locate_all.   
-- **Data structure****: separate chaining hash table 
+- **Data structure**: separate chaining hash table 
 - **Why this data structure and not another**: same reasoning as in dictionary 1, except that keys aren't positions here and th
 
 **6) Dictionary 4**:
