@@ -1,0 +1,400 @@
+#lang dssl2
+
+# Final project: Trip Planner
+
+import cons
+#import 'project-lib/dictionaries.rkt'
+import 'project-lib/project-lib/compiled/dictionaries.rkt' #is this how we import?
+#import 'project-lib/project-lib/compiled/graph.rkt'
+#import 'project-lib/project-lib/compiled/binheap.rkt'
+import sbox_hash
+
+let eight_principles = ["Know your rights.",
+"Acknowledge your sources.",
+"Protect your work.",
+"Avoid suspicion.",
+"Do your own work.",
+"Never falsify a record or permit another person to do so.",
+"Never fabricate data, citations, or experimental results.",
+"Always tell the truth when discussing your work with your instructor."]
+
+### Basic Types ###
+
+#  - Latitudes and longitudes are numbers:
+let Lat?  = num?
+let Lon?  = num?
+
+#  - Point-of-interest categories and names are strings:
+let Cat?  = str?
+let Name? = str?
+
+### Raw Item Types ###
+
+#  - Raw positions are 2-element vectors with a latitude and a longitude
+let RawPos? = TupC[Lat?, Lon?]
+
+#  - Raw road segments are 4-element vectors with the latitude and
+#    longitude of their first endpoint, then the latitude and longitude
+#    of their second endpoint
+let RawSeg? = TupC[Lat?, Lon?, Lat?, Lon?] ##
+
+#  - Raw points-of-interest are 4-element vectors with a latitude, a
+#    longitude, a point-of-interest category, and a name
+let RawPOI? = TupC[Lat?, Lon?, Cat?, Name?]
+
+### Contract Helpers ###
+
+# ListC[T] is a list of `T`s (linear time):
+let ListC = Cons.ListC
+# List of unspecified element type (constant time):
+let List? = Cons.list?
+
+
+interface TRIP_PLANNER:
+
+    # Returns the positions of all the points-of-interest that belong to
+    # the given category.
+    def locate_all(
+            self,
+            dst_cat:  Cat?           # point-of-interest category
+        )   ->        ListC[RawPos?] # positions of the POIs
+
+    # Returns the shortest route, if any, from the given source position
+    # to the point-of-interest with the given name.
+    def plan_route(
+            self,
+            src_lat:  Lat?,          # starting latitude
+            src_lon:  Lon?,          # starting longitude
+            dst_name: Name?          # name of goal
+        )   ->        ListC[RawPos?] # path to goal
+
+    # Finds no more than `n` points-of-interest of the given category
+    # nearest to the source position.
+    def find_nearby(
+            self,
+            src_lat:  Lat?,          # starting latitude
+            src_lon:  Lon?,          # starting longitude
+            dst_cat:  Cat?,          # point-of-interest category
+            n:        nat?           # maximum number of results
+        )   ->        ListC[RawPOI?] # list of nearby POIs
+
+struct Road:
+    let Position1
+    let Position2
+    let distance
+
+struct Position: #I'm not really using it now
+    let latitude
+    let longtitude
+    
+struct POI: #don't want this like thi
+    let Position
+    let category
+    let name #-- this is capital to represtn fact that it's a struct. correct?
+
+struct node: #for binary heap 
+    let vertex
+    let weight
+            
+class TripPlanner (TRIP_PLANNER):
+    let all_roads #do I need to define these? yes
+    let pois
+    let position_to_num_dict
+    let numb_to_positions_dict
+    
+    ##let size
+    
+    def __init__(self, roads, pois):
+        #self.roads = roads#graph or an aDT for all Raod structs #should all of this be -- no need for a road 
+        #for i in roads: -- he said no need to initialize a self for that 
+        #no need to worry about roads yet 
+            
+        self.position_to_num_dict= HashTable( roads.len() * 2 , make_sbox_hash()) #as you add elements in hashtable, keep track of how many elemetns you inserted without duplicates - insert that into graph
+        #length doesn't need to be the same for hastable and graph: the one in the graph need sto be accurate - hashtable shouldn't have duplicates
+        self.numb_to_positions_dict= [None; roads.len() * 2] #direct addressing #turn them into nodes - extract positions from nodes and nodes from dictionaries
+
+        for i, road in roads:
+            let lat1 = road[0]
+            let long1 = road[1]
+            let lat2 = road[2]
+            let long2 = road[3]
+            let position1 = [lat1,long1] #Position (lat1,long1)
+            let position2= [lat2,long2] #Position (lat2, long2)
+            self.position_to_num_dict.put(position1, i) #I'm inserting a struct not a tuple - need input on this 
+            self.position_to_num_dict.put(position2, i)
+            self.numb_to_positions_dict.put(i, position1)
+            self.numb_to_positions_dict.put(i, position2)
+        #for i in range(roads):
+        #    for j in range(0,4,2):
+        #        a.put(Position(roads[i][j],roads[i][j+1]))
+               
+        self.all_roads = [None; roads.len()] # use self. for this ? pm said don't need to intilize it yet, why? - she aslo said no need to intitalize it 
+        for i, road in roads:
+            let lat1 = road[0]
+            let long1 = road[1]
+            let lat2 = road[2]
+            let long2 = road[3]
+            let position1 = [lat1,long1]#Position (lat1,long1)
+            let position2= [lat2,long2] #Position (lat2, long2)
+            let distance  = sqrt((lat1-lat2)*(lat1-lat2) + (long1 - long2)*(long1 - long2)) #correct format?
+            all_roads[i] = Road(position1, position2, distance)
+        #positions can't directly be nodes, have to represent using a natural number
+        self.road_graph= WUGraph(self.numb_to_positions_dict.len()) #max num of nodes is num edges squared - she said length is fine 
+        for i in self.all_roads:
+            let position1 = position_to_num_dict.get(i.Position1) #is this correct?
+            let position2 = position_to_num_dict.get(i.Position2)
+            let distance  = i.distance
+            road_graph.set_edge(position1, position2,distance)
+        
+        self.pois=HashTable(  pois.len() , make_sbox_hash()) #this deals with duplicates? pois dont' have duplicates : , replacing the key’sprevious value if already present.
+        for poi in pois:
+            #check if cat is in hash table
+            #get the linked list and update it 
+            #if it's new 
+            #cons 
+            let category = poi[2]
+            let lat = poi[0]
+            let long = poi[1]
+            let position = [lat,long] #a tuple instead of a cons?
+            if self.pois.mem?(category) == True:
+                value = self.pois.get(category) #pointer issues?
+                if value != position: #to prevent duplicates
+                    updated_value = cons(position, value)
+                    self.pois.put(updated_value)
+            else:
+               self.pois.put(category, position) #make a linked list as a value 
+        #self.pois= [None; pois.len()]#sets vector, dic
+        ##do a hashtable: keys are cagt and value are positino
+        #for i, poi in pois:
+         #   let lat = poi[0]
+          #  let long = poi[1]
+           # let category = poi[2]
+            #let name = poi[3]
+            #let position = Position (lat,long)
+            #self.pois[i] = POI(name, category, position)
+
+#test"the_constructor": #how do I test this?
+ 
+      #     TripPlanner([[0,0, 0,1], [0,0, 1,0]],
+       #                [[0,0, "bar", "The Empty Bottle"],
+        #                [0,1, "food", "Pierogi"]])   
+                                 
+    def locate_all (self, dst_cat): # positions of the POIs -- no duplicates allowed - linked list of raw positino - should I create dict?
+        return self.pois.get(dst_cat)
+        #hashtable solution -- what are locate all's edge cases?
+        #for index, i in self.pois: #want an association list 
+        #all_positions = self.pois.get(dst_cat)
+        #for i in all_positions: #can't loop through a dict
+        #    position = self.pois.get(dst_cat)
+
+        #fr i in 
+        #for loop solution -- should dealwith duplicates
+        #let positions = None #this is linked list 
+        #for index, i in self.pois:
+        #    if i.category =  dst_cat:
+        #        let position_lat = i.Position.latitude
+        #        let position_long = i.Position.longtitude
+        #        position = Position(position_lat,position_long) ##convert to brackets 
+        #        positions = cons(position, positions) ##is this how we do it?
+        #return positions
+        
+       
+       
+#test, locate all
+        #test if pois were all of hte same category in all positinos 
+        #test if pois were all of hte same category in one position only and the rest had other pois - no duplicates for the ones in same position
+        #test if there is only 1 poi in each catagory at each poistion -- kind of included that in the 
+        #test if there are no pois at any position - should return an empty linked list - included in the second test - food 
+        #test if there are pois of same category at one position and there are no pois in all other position - linked list should have 1 item only
+
+
+def my_first_example():
+    return TripPlanner([[0,0, 0,1], [0,0, 1,0]],
+                       [[0,0, "bar", "The Empty Bottle"],
+                        [0,1, "food", "Pierogi"]])
+
+test 'My first locate_all test':
+    assert my_first_example().locate_all("food") == cons([0,1], None)
+
+def second_example():
+    return TripPlanner([[0,0, 1,0], [-0.5,0, 0,0]], #have multiple pois in the 
+                       [[0,0, "pizza", "The Empty Bottle"],
+                        [0,0, "pizza", "Pierogi"],
+                        [1,0, "pizza", "amore"],
+                        [1,0, "pizza", "poma"],
+                        [-0.5,0, "pizza", "tonight"],
+                        [-0.5,0, "pizza", "high"]
+                        ])    
+                        
+test 'locate_all:all_same_category':
+    assert second_example().locate_all("pizza") == cons([0,1],[1,0], [-0.5,0], None) #OR cons([0,1],[1,0], [-0.5,0], None) #order doesn't matter
+    assert second_example().locate_all("food") == None #if there are no pois for our category, does it return none? in a cons or just None?
+
+def third_example():
+    return TripPlanner([[0,0, 1,0], [-0.5,0, 0,0]], #have multiple pois in the 
+                       [[0,0, "pizza", "The Empty Bottle"],
+                        [0,0, "pizza", "Pierogi"],
+                        [1,0, "chicken ", "amore"],
+                        [1,0, "drinks", "poma"],
+                        [-0.5,0, "chicken", "tonight"],
+                        [-0.5,0, "gifts", "high"]
+                        ])        
+test 'locate_all:some_same_category':
+    assert third_example().locate_all("pizza") == cons([0,0], None) #no duplicates
+    assert third_example().locate_all("food") == None #have to write that in function
+    assert third_example().locate_all("chicken") == cons([1,0],[-0.5,0], None) #OR cons([-0.5,0],[1,0], None) #or wouldn't work
+    assert third_example().locate_all("drinks") == cons([1,0], None) 
+    assert third_example().locate_all("gifts") == cons([-0.5,0], None) 
+
+    def plan_route(self,src_lat:  Lat?, src_lon:  Lon?, dst_name: Name?)   ->        ListC[RawPos?]:
+        name_to_position_dict=HashTable( pois.len() , make_sbox_hash()) #this deals with duplicates? pois dont' have duplicates : , replacing the key’sprevious value if already present.
+        for poi in pois:
+            let category = poi[2]
+            let lat = poi[0]
+            let long = poi[1]
+            let position = [lat,long] #a tuple instead of a cons?
+            name_to_position_dict.put(category, position)
+        
+        destination_position=name_to_position_dict.get(dst_name)
+        destination_node= self.position_to_num_dict.get(destination_position) #this is the node number
+        source_node= self.position_to_num_dict.get([src_lat,src_lon]) #this is the node number
+        
+        #creating vectors 
+        let finished_nodes = [None, self.road_graph.n_vertices()] 
+        #let to_do_nodes = [None, self.road_graph.n_vertices()*self.road_graph.n_vertices()] #? wasn't hte whole point of dijkstra to look at nodes once?
+        let to_do_nodes = BinHeap(self.road_graph.n_vertices() * self.road_graph.n_vertices(), λ x, y: x.weight < y.weight) #create a struct and comare feilds of structs
+        
+        let predecessors=[None, self.road_graph.n_vertices()]
+        #let distances_binheap = BinHeap(self.road_graph.n_vertices() * self.road_graph.n_vertices(), λ x, y: x < y) #
+        let distances_vector = [inf, self.road_graph.n_vertices()] #are all 3 of them same length? how to intialize infinity?
+        #or I can make a graph that has the most up to date version of the shortest path 
+        #or a for loop that puts all the weights of get_all_edges in a vector 
+        
+        #setting starting distance to zero instead of infinity
+        to_do_nodes.insert(0)  #does the source node have to be the first elemnt in the distanes vector? I put source node instead of zero becuase source_node is the actual number of the staring node
+        
+        #counter =0 #do I need the counter?
+        while to_do_nodes.len() != 0:#None: #is this condition correct? can teh weight be none? #this will be O(n^2)
+            current_node = source_node.vertex
+            adjacent_nodes = self.road_graph.get_adjacent (current_node) #have to update teh node 
+            #weights_adjacent_nodes = [None, self.road_graph.n_vertices()* self.road_graph.n_vertices()]
+            #for node in adjacent_nodes:
+            #    weight = self.road_graph.get_edge(node) #pointer? need to update?
+            #    to_do_nodes.insert(weight)
+            #smallest_weight = to_do_nodes.find_min()
+            #smallest_weight_node =  #how do I get this?
+            to_do_nodes.remove_min()
+            #mark the node as done 
+            counter = counter+1
+            
+            if smallest_weight_node not in finished_nodes:
+                finished_nodes[counter] = smallest_weight_node
+                for adjacent_node in self.road_graph.get_adjacent (smallest_weight_node): #wouldn't this increase my complexiyt a lot?
+                    weight = self.road_graph.get_edge(adjacent_node) #same variable name as above
+                    if distances_vector[smallest_weight_node] +  weight < distances_vector[adjacent_node]   :#what should the index be? #total path - how do I indicate that, my dist vector is empty 
+                       #using distances_vector[adjacentn ode] is wrong - I didn't store adjacent node into distances. value will collide on same index
+                         #weights_adjacent_nodes[i] = self.road_graph.get_edge(node) #there is no way for me to know the index is for which node 
+                            #is distance the total path? - it's the stored best until now total distance for all of path
+                        distances_vector[adjacent_node] = distances_vector[smallest_weight_node] +  weight
+                        predecessors[adjacent_node] = smallest_weight_node #why do we not mark node as done?
+                        to_do_nodes.insert(adjacent_node)
+                        
+            #smallest_weight = to_do_nodes.find_min() #why should this be the first step? it'll remove A 
+            #to_do_nodes.remove_min()
+            #if smallest_weight not in finished_nodes #comparing the nodes not weights #might get a pointer issue here
+        #for node in self.road_graph.get_all_edges(): #accesing a list of cons of WEdge
+        #    distances_binheap.insert(0)
+
+        #predecessor vector -- chekc if path exists 
+            #a weight vector 
+            # in a set, keep track of the nodes we finished?
+            #start with the nodes that come out of the priority queue - we'll check those for their weights first 
+                        
+        def find_nearby(self, src_lat, src_lon, dst_cat, n):
+            jj
+        #find all nearby , sort them by distances, then take a slice as big as n 
+        #category to positino dictionary  = self.pois in init                    
+
+#tests - plan route how many decimals does the distance hold? distance is a fraction right?
+            ##2 routes that give the same distance - I need to make the ddecisin in function
+            ##test for a destination that doesn't exist - done
+            ##test for a destination taht is on the same position as the starting position - done
+            ##different starting points to the same destinatino and checking result is different - done
+            ##4 possible paths 
+            ##intersection - how do I do that - not done 
+            ## disconnected graph - not done 
+                                     
+test 'My first plan_route test': #one road only
+   assert my_first_example().plan_route(0, 0, "Pierogi") == cons([0,0], cons([0,1], None))
+
+def second_plan_route():
+    return TripPlanner([[0.7,0, 0.1,0], [0.7,0, 0.5,-1], [0.5,-1, 0.1,0], [0.1,0, -2,-2]], #have multiple pois in the 
+                       [[0.7,0, "pizza", "The Empty Bottle"],
+                        [0.1,0, "pizza", "Pierogi"], #trying 2 destinatinos 
+                        [0.1,0, "chicken ", "amore"],
+                        [0.5,-1, "drinks", "poma"],
+                        [0.5,-1, "chicken", "tonight"],
+                        [-2,-2, "gifts", "high"]
+                        ])   
+                        
+def four_path_plan_route(): #has stops 
+    return TripPlanner([[0,0, 3,-0.5], [0,0, 1.5,-1], [0,0, -0.5,-1], [0,0, -3,-0.5], [0,-3, 3,-0.5],[0,-3, 1.5,-1],[0,-3, -0.5,-1],[0,-3, -3,-0.5], [-0.5,-1, 1.5,-1]], #have multiple pois in the 
+                       [[0,0, "pizza", "The Empty Bottle"],
+                        [0,-3, "gifts", "high"]
+                        ]) 
+def four_path_plan_route_second(): #this has a direct path without stops and 2 equal length paths 
+    return TripPlanner([[0,0, 3,-0.5], [0,0, 1.5,-1], [0,0, -0.5,-1], [0,0, -3,-0.5], [0,-3, 3,-0.5],[0,-3, 1.5,-1],[0,-3, -0.5,-1],[0,-3, -3,-0.5], [0,0, 0,-3]], #have multiple pois in the 
+                       [[0,0, "pizza", "The Empty Bottle"],
+                        [0,-3, "gifts", "high"]
+                        ])
+def four_path_plan_route_second(): #2 equal paths only with many pois in each position
+    return TripPlanner([[0,0, 3,-0.5], [0,0, -3,-0.5], [0,-3, 3,-0.5],[0,-3, -3,-0.5]], #have multiple pois in the 
+                       [[0,0, "pizza", "The Empty Bottle"],
+                        [0,-3, "gifts", "high"], #desired destination
+                        [0,-3, "drinks", "lala"],
+                        [0,-3, "drinks", "rest"],
+                        [0,0, "pizza", "Pierogi"], 
+                        [0,0, "chicken ", "amore"],
+                        [3,-0.5, "drinks", "poma"],
+                        [3,-0.5, "chicken", "tonight"],
+                        [3,-0.5, "gifts", "paaa"],
+                        [-3,-0.5, "pizza", "johns"],  
+                        [-3,-0.5, "chicken ", "downtown"]                      
+                        ]) 
+                                   
+test 'My plan_route-2-possible-roads-high':
+   assert second_plan_route().plan_route(0.7, 0, "high") == cons([0.7,0] ,cons([0.1,0], cons([-2,-2], None))) #Cons.from_vec([[0.7,0], [0.1,0],[-2,-2]]) 
+      
+test 'My plan_route-2-possible-roads-high-2': #testing first test with a different starting point 
+   assert second_plan_route().plan_route(0.5, -1, "high") ==  cons([0.5,-1], cons([0.1,0] ,cons([-2,-2], None))) #Cons.from_vec([[0.5,-1], [0.1,0],[-2,-2]])
+
+test 'My plan_route-2-possible-roads-amore':
+   assert second_plan_route().plan_route(0.5, -1, "amore") == cons([0.5,-1], cons([0.1,0], None))#Cons.from_vec([[0.7,0], [0.1,0],[-2,-2]]) 
+   
+test 'My plan_route-destination-same-source':
+   assert second_plan_route().plan_route(-2, -2, "high") == cons([-2,-2], cons([-2,-2], None)) #do I repeat the destinatino or write it once?   
+
+test 'My plan_route-destination-doesnt-exist':
+   assert second_plan_route().plan_route(0, -1, "thankyou") == None#what should this return? don't know what reachable means
+
+test 'My plan_route-4possible-paths': 
+   assert four_path_plan_route().plan_route(0, 0, "high") == cons([0,0] ,cons([-0.5,-1], cons([0,-3], None)))
+   assert four_path_plan_route().plan_route(0, 0, "thankyou") == cons(None) #test a destinatino that doesn't exist
+   
+test 'My plan_route-4possible-paths-2': 
+   assert four_path_plan_route_second().plan_route(0, 0, "high") == cons([0,0], cons([0,-3], None))
+   assert four_path_plan_route_second().plan_route(0, 0, "thankyou") == cons(None) #test a destinatino that doesn't exist  
+   
+test 'My plan_route-equal-length-roads': #equal length paths  
+   assert four_path_plan_route_second().plan_route(0, 0, "high") == cons([0,0], cons([-3,-0.5], None))  #chose the left path, need to encode in function#
+
+   
+#tests: find nearby
+        ## 4 pois with same category at same position (aka distance)
+        ## try same destination with a different starting position
+        ## try same destination and starting position but differnt n
+                  
+test 'My first find_nearby test':
+    assert my_first_example().find_nearby(0, 0, "food", 1) == cons([0,1, "food", "Pierogi"], None)
+test 'My first find_nearby test':
+    assert my_first_example().find_nearby(0, 0, "food", 1) == cons([0,1, "food", "Pierogi"], None)
