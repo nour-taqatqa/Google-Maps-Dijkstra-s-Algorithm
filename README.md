@@ -3,7 +3,7 @@
 **Goal**:
 - To implement a trip planning API (Application Programming Interface) that provides routing and searching service
 
-The trip planner will store map data representing three kinds of items andanswer three kinds of queries about them.
+The trip planner will store map data representing three kinds of items and answer three kinds of queries about them.
 
 **Items**
 - A position has a latitude and a longitude, both numbers.
